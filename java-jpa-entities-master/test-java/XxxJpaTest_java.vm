@@ -1,0 +1,134 @@
+## --------------------------------------------------
+#if ( $entity.isJoinEntity() )
+#cancel("No test class for join entity")
+#end
+## --------------------------------------------------
+#parse("include/init_var_entity.vm")
+#parse("/include/java_header.vm")
+##------------------------------------------------------
+package ${target.javaPackageFromFolder($TEST_SRC)};
+
+import static junit.framework.TestCase.assertNotNull;
+
+## import ${ROOT_PKG}.jpa.tools.JpaTest;
+import ${ROOT_PKG}.entities.tooling.JpaTest;
+import org.junit.Test;
+
+## macro to define referenced value for the given attribute
+#macro( setRefValue $attrib )
+#foreach( $fkPart in $attrib.fkParts )
+#if ( $foreach.count == 1 )
+## #set( $refEntity = $model.getEntityByClassName($fkPart.referencedEntityName) )
+## #set( $refAttribute = $refEntity.getAttributeByName($fkPart.referencedAttributeName) )
+## #set( $refValue = "${refEntity.name}JpaTest.getInitEntity().${refAttribute.getter}()" )
+## new (for test)
+#set( $n = $attrib.fkPartsCount )
+#set( $e = $fkPart.referencedEntity )
+#set( $a = $fkPart.referencedAttribute )
+##
+#set( $refValue = "${fkPart.referencedEntityName}JpaTest.getInitEntity().${fkPart.referencedAttribute.getter}()" )
+#end
+#end
+#end
+##
+#set( $values1 = $fn.buildValues($entity.attributes, 1) )
+#set( $values2 = $fn.buildValues($entity.attributes, 2) )
+##
+public class ${entity.name}JpaTest extends JpaTest {
+
+    public static ${entity.name} getInitEntity() {
+#buildEntity($values1)
+	}
+	
+    private ${entity.name} createEntity() {
+#buildEntity($values2)
+    }
+
+#macro( buildEntity $argValues )
+    	${entity.name} entity = new ${entity.name}();
+#foreach( $attribute in $entity.attributes )
+#if ( $attribute.isFK() )
+#setRefValue ( $attribute )
+		entity.${attribute.setter}( $refValue ) ;
+#else
+#if ( ! $attribute.isAutoIncremented() )
+		entity.${attribute.setter}( $argValues.getValue($attribute.name) ) ;
+#else
+		// $attribute.name is auto-incremented => do not set
+#end
+#end 
+#end
+    	return entity;
+#end
+
+    private Object getEntityKey(${entity.name} entity) {
+#if ( $entity.hasCompositePrimaryKey() )  
+		return new ${jpaEntityIdClass}( $fn.argumentsListWithGetter("entity", $entity.keyAttributes) );
+#else
+    	return entity.${entity.keyAttribute.getter}();
+#end
+    }
+
+    @Test
+    public void testFind() {
+#if ( $entity.hasGeneratedKey() ) 
+		// NB: this entity has an GENERATED PRIMARY KEY
+		// Cannot use a generic test with this kind of PK
+		// Create a specific test for this case
+#else    	    	
+    	${entity.name} e = find(${entity.name}.class, getEntityKey(getInitEntity()) );
+		assertNotNull(e);
+#end
+    }
+    
+    @Test
+    public void testPersistFind() {
+#if ( $entity.hasGeneratedKey() ) 
+		// NB: this entity has an GENERATED PRIMARY KEY
+		// Cannot use a generic test with this kind of PK
+		// Create a specific test for this case
+#else    	    	
+    	${entity.name} entity = createEntity();
+    	Object key = getEntityKey(entity);
+
+    	// if entity doesn't exist yet
+    	if ( find(${entity.name}.class, key) == null ) {
+
+	    	// Create with 'persist'
+    		persistAndRefresh(entity);
+    	
+			// Find
+			${entity.name} entity2 = find(${entity.name}.class, key);
+			assertNotNull(entity2);
+        
+			// Remove (use only if no risk of referential integrity constraint violation)
+			// findAndRemove(${entity.name}.class, key);			
+			// assertNull(find(${entity.name}.class, key));
+		}
+#end
+    }
+
+    @Test
+    public void testMergeFind() {
+#if ( $entity.hasGeneratedKey() ) 
+		// NB: this entity has an GENERATED PRIMARY KEY
+		// Cannot use a generic test with this kind of PK
+		// Create a specific test for this case
+#else    	
+    	${entity.name} entity = createEntity();
+    	Object key = getEntityKey(entity);
+
+    	// Create or update with 'merge'
+    	mergeAndRefresh(entity);
+    	
+    	// Find
+    	${entity.name} entity2 = find(${entity.name}.class, key);
+        assertNotNull(entity2);
+        
+		// Remove (use only if no risk of referential integrity constraint violation)
+		// findAndRemove(${entity.name}.class, key);			
+        // assertNull(find(${entity.name}.class, key));
+#end
+    }
+
+}

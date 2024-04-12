@@ -1,0 +1,68 @@
+#parse("/include/java_header.vm")
+##------------------------------------------------------
+#set( $entityNames = [] )
+#foreach( $entity in $model.allEntites )
+#if ( ! $entity.isJoinEntity() ) 
+#set($_ = $entityNames.add( $entity.name ) )
+#end
+#end
+##------------------------------------------------------
+package ${target.javaPackageFromFolder($TEST_SRC)};
+
+import javax.persistence.EntityManager;
+
+#foreach( $entityName in $entityNames )
+## import ${ROOT_PKG}.jpa.data.${entityName}Data;
+import ${ROOT_PKG}.entities.${entityName}JpaTest;
+#end
+
+/**
+ * Database initialization before unit tests
+ * 
+ * @author Telosys
+ *
+ */
+public class DatabaseInit {
+
+    /**
+     * Set database initial state
+     * @param em
+     */
+    public static void initializeTablesData(EntityManager em) {
+
+		// Disable referential integrity
+    	execNativeQuery(em, "SET REFERENTIAL_INTEGRITY FALSE");
+
+		// Initialize each table with one entity
+#foreach( $entityName in $entityNames )
+		initTableWithEntity(em, ${entityName}JpaTest.getInitEntity());	
+#end
+
+		// Enable referential integrity
+    	execNativeQuery(em, "SET REFERENTIAL_INTEGRITY TRUE");
+    }
+
+	private static void execNativeQuery(EntityManager em, String sql) {
+    	em.getTransaction().begin();
+    	em.createNativeQuery(sql).executeUpdate();
+    	em.getTransaction().commit();
+    }
+    
+    private static void initTableWithEntity(EntityManager em, Object entity) {
+		execQuery(em, "DELETE FROM " + entity.getClass().getSimpleName());
+		initEntity(em, entity);
+    }
+    
+    private static void execQuery(EntityManager em, String sql) {
+    	em.getTransaction().begin();
+    	em.createQuery(sql).executeUpdate();
+    	em.getTransaction().commit();
+    }
+    
+    private static void initEntity(EntityManager em, Object entity) {
+        em.getTransaction().begin();
+        em.merge(entity);
+        em.getTransaction().commit();		
+    }
+
+}
